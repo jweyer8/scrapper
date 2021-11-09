@@ -1,7 +1,6 @@
 require 'nokogiri'
 require 'httparty'
-require 'byebug'
-
+require 'spreadsheet'
 
 #get input from user
 #get location 
@@ -29,8 +28,8 @@ end
 #Nokogiri is used to parse the raw HTML that HTTParty scraped
 def getHTML(base_url)
     begin 
-        input = userInput()
-        puts "#{base_url + '/' + input[:state] +  '/' + input[:city]}"
+        # input = userInput()
+        input = {state: 'wa', city: 'maple-valley', max_price: 2000, min_price: 1000, beds: 1}
         unparsed_page = HTTParty.get(base_url + '/' + input[:state] +  '/' + input[:city])
         parsed_page = Nokogiri::HTML(unparsed_page) 
         #raise a StandardError if web page doesn't exist (404 Error)
@@ -98,6 +97,7 @@ def listings(parsed_page, base_url, input)
         #see plans() function above
         unless floor_plans.empty?
             apartments << {
+                name: apartment_listing.css('a').text,
                 link: base_url + apartment_listing.css('a')[0].attributes['href'].value.to_s,
                 address: apartment_listing.css('span').text,
                 plans: floor_plans.map(&:dup)
@@ -109,9 +109,64 @@ def listings(parsed_page, base_url, input)
 end
 
 
+#port data to an excel block for easy viewing
+#see spreadsheet gem
+def createXLS(apartments)
+    #creat new excel object
+    book = Spreadsheet::Workbook.new
+    sheet = book.create_worksheet(name: 'First Sheet')
+    #initate formats for excel cells
+    format_full_border = Spreadsheet::Format.new :horizontal_align => :center, :weight => :bold, :border => :thin, :pattern_fg_color => :Silver, :pattern => 1
+    format_bottom_border_bold = Spreadsheet::Format.new :horizontal_align => :center, :weight => :bold, :bottom => :thin, :top => :thin, :pattern_fg_color => :Silver, :pattern => 1
+    format_bottom_border = Spreadsheet::Format.new :bottom => :thin, :horizontal_align => :right
+    format_bold = Spreadsheet::Format.new :horizontal_align => :center, :weight => :bold
+    format_blue = Spreadsheet::Format.new :color => :blue
+    format_right = Spreadsheet::Format.new :horizontal_align => :right
+  
+
+    #write data to excel for every apartment scrapped
+    apartments.each_with_index do |apartment, i|
+        indx = i*10 #10 rows between each apartment data
+
+        #formating
+        #merge lambda fro easier merging of certain cells
+        #takes in a 2d array [[row], [{start column, end column}]]
+        add_merge = -> (row_col) {sheet.merge_cells(row_col[0], row_col[1][:start], row_col[0], row_col[1][:stop])}
+        merges = [ [indx, {start: 0, stop: 5}], [indx+1, {start: 1, stop: 5}], [indx+2, {start: 1, stop: 5}], [indx+3, {start: 0, stop: 5}], [indx+4, {start: 0, stop: 1}], [indx+4, {start: 2, stop: 3}], [indx+4, {start: 4, stop: 5}]]
+        merges.each(&add_merge)
+        sheet.row(indx+2).set_format(1, format_blue)
+        #format across 5 columns
+        (0..5).each {|x| sheet.row(indx).set_format(x, format_full_border)}
+        (0..5).each {|x| sheet.row(indx+3).set_format(x, format_bottom_border_bold)}
+        (0..5).each {|x| sheet.row(indx+4).set_format(x, format_bold)}
+
+        #entering data into cells
+        sheet.row(indx).push(apartment[:name])
+        sheet.row(indx+1).push("address", apartment[:address])
+        sheet.row(indx+2).push("Link", "#{Spreadsheet::Link.new apartment[:link]}") #create hyperling
+        sheet.row(indx+3).push("Floor Plans")
+        sheet.row(indx+4).push("# Bedrooms", "","Price", "", "Sqrf")
+        
+        #for every valid floor plan listing within apartment write data
+        #inludes price, number of beds, and square footage
+        apartment[:plans].each_with_index do |plan, j|
+            indx2 = indx+5+j
+            [ [indx2, {start: 0, stop: 1}], [indx2, {start: 2, stop: 3}], [indx2, {start: 4, stop: 5}]].each(&add_merge)
+            (0..5).each {|x| sheet.row(indx2).set_format(x, format_right)}
+            sheet.row(indx2).push(plan[:num_bed], "", plan[:price], "", plan[:footage])
+            if j+1 == apartment[:plans].length then (0..5).each {|x| sheet.row(indx2).set_format(x, format_bottom_border)} end
+        end   
+    end
+     book.write "/Users/jweyer/Desktop/apartments.xls"
+end
+
+
 ##########MAIN###############
  base_url = 'https://www.apartmentlist.com'
  apartments = getHTML(base_url)
  puts `clear`
- puts "#{apartments}"
+#  puts apartments
+ createXLS(apartments)
+
+
 
