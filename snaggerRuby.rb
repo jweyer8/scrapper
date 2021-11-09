@@ -1,33 +1,43 @@
 require 'nokogiri'
 require 'httparty'
 require 'spreadsheet'
+require 'rubygems'
 
 #get input from user
 #get location 
 #get desired price max/min
 #get number of beds
+#command line arguments can be used instead of manual input
+#user will be prompted to input ommited command line arguments
 def userInput()
-    info = [:state, :city, :max_price, :min_price, :beds].zip(ARGV.cycle).to_h
+    info = [:state, :city, :max_price, :min_price, :beds].zip(ARGV).to_h
     if info[:state].nil? 
         puts "Enter state: "
-        info.merge!(state: gets.chomp.downcase[0..1])
+        info[:state] = $stdin.gets.chomp.downcase[0..1]
     end
     if info[:city].nil?
         puts "Enter city: "
-        info.merge!(city: gets.chomp.gsub(' ','-').gsub(' ','').downcase)
+        info[:city] = $stdin.gets.chomp.gsub(' ','-').gsub(' ','').downcase
     end
     if info[:max_price].nil?
         puts "Enter max price: "
-        info.merge!(max_price: gets.chomp.match(/\d+/)[0].to_i)
+        info[:max_price] = $stdin.gets.chomp.match(/\d+/)[0].to_i
+    else
+        info[:max_price] = info[:max_price].to_i
     end
     if info[:min_price].nil?
         puts "Enter min price: "
-        info.merge!(min_price: gets.chomp.match(/\d+/)[0].to_i)
+        info[:min_price] = $stdin.gets.chomp.match(/\d+/)[0].to_i
+    else
+        info[:min_price] = info[:min_price].to_i
     end
     if info[:beds].nil?
         puts "Enter number of beds: "
-        info.merge!(beds: gets.chomp.match(/\d+/)[0].to_i)
+        info[:beds] = $stdin.gets.chomp.match(/\d+/)[0].to_i
+    else
+        info[:beds] = info[:beds].to_i
     end
+    info
 end
 
 
@@ -39,11 +49,10 @@ end
 def getHTML(base_url)
     begin 
         input = userInput()
-        input = {state: 'wa', city: 'maple-valley', max_price: 2000, min_price: 1000, beds: 1}
         unparsed_page = HTTParty.get(base_url + '/' + input[:state] +  '/' + input[:city])
         parsed_page = Nokogiri::HTML(unparsed_page) 
-        #raise a StandardError if web page doesn't exist (404 Error)
-        raise StandardError.new unless parsed_page.xpath("//h1[starts-with(text(), 'Uh oh, we can') and contains(text(), 'find that page')]").empty? 
+        puts `clear`
+        raise StandardError.new if unparsed_page.code == 404
     rescue SocketError => bad_url
         puts "Invalid input\nTry again:"
         retry
@@ -53,7 +62,25 @@ def getHTML(base_url)
         puts "#{unknown_state.message}"
         retry 
     end
-    listings(parsed_page, base_url, input)
+
+    #loop through all the pages to find all the valid apartments
+    apartments = []
+    #determine number of pages by the paginination buttons on bottom of first page
+    num_pages = parsed_page.xpath("(//ul[contains(@class, 'MuiPagination-ul')]/li)[last()]/preceding-sibling::*[1]/a").text.to_i
+    num_pages.times do |page|
+        #the url for the first was previously determined
+        if page != 0
+            unparsed_page = HTTParty.get(base_url + '/' + input[:state] +  '/' + input[:city] + "/page-#{page+2}")
+            parsed_page = Nokogiri::HTML(unparsed_page) 
+            puts `clear`
+        end
+        #append all valid apartments on given page 
+        apartments << listings(parsed_page, base_url, input)
+    end
+    # each pages valid appartments are appended as an array
+    # resulting in a 2d array 
+    # create a 1d array from all page apartments
+    [apartments.flatten, input]
 end
 
 
@@ -119,9 +146,26 @@ def listings(parsed_page, base_url, input)
 end
 
 
+#sort the apartments 
+#sort based off price
+def sortApartments(apartments)
+    sort = true
+    while sort
+        sort = false
+        (apartments.length-1).times do |i|
+            if apartments[i][:plans][0][:price] > apartments[i+1][:plans][0][:price]
+                apartments[i][:plans][0][:price], apartments[i+1][:plans][0][:price] = apartments[i+1][:plans][0][:price], apartments[i][:plans][0][:price]
+                sort = true
+            end
+        end
+    end
+    apartments
+end
+
+
 #port data to an excel block for easy viewing
 #see spreadsheet gem
-def createXLS(apartments)
+def createXLS(apartments, user_input)
     #creat new excel object
     book = Spreadsheet::Workbook.new
     sheet = book.create_worksheet(name: 'First Sheet')
@@ -149,7 +193,8 @@ def createXLS(apartments)
         #entering data into cells
         sheet.row(indx).push(apartment[:name])
         sheet.row(indx+1).push("address", apartment[:address])
-        sheet.row(indx+2).push("Link", "#{Spreadsheet::Link.new apartment[:link]}") #create hyperling
+        link = Spreadsheet::Link.new apartment[:link]
+        sheet.row(indx+2).push("Link", link) #create hyperling
         sheet.row(indx+3).push("Floor Plans")
         sheet.row(indx+4).push("# Bedrooms", "","Price", "", "Sqrf")
         #for every valid floor plan listing within apartment write data
@@ -162,16 +207,18 @@ def createXLS(apartments)
             if j+1 == apartment[:plans].length then (0..5).each {|x| sheet.row(indx2).set_format(x, format_bottom_border)} end
         end   
     end
-     book.write "/Users/jweyer/Desktop/apartments.xls"
+    book.write "/Users/jweyer/Desktop/apartments-#{user_input[:city]}.xls"
 end
 
 
 ##########MAIN###############
- base_url = 'https://www.apartmentlist.com'
- apartments = getHTML(base_url)
- puts `clear`
-#  puts apartments
- createXLS(apartments)
+ base_url = 'https://www.apartmentlist.com'  
+ #data is an array 
+ #[0] all valid apartments
+ #[1] user input
+ data = getHTML(base_url)
+ apartments = sortApartments(data[0])
+ createXLS(apartments, data[1])
 
 
 
