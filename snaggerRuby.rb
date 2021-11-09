@@ -211,7 +211,7 @@ def createXLS(apartments, user_input)
 end
 
 
-##########MAIN###############
+#MAIN
  base_url = 'https://www.apartmentlist.com'  
  #data is an array 
  #[0] all valid apartments
