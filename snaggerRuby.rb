@@ -7,17 +7,27 @@ require 'spreadsheet'
 #get desired price max/min
 #get number of beds
 def userInput()
-    info = {}
-    puts "Enter state: "
-    info.merge!(state: gets.chomp.downcase[0..1])
-    puts "Enter city: "
-    info.merge!(city: gets.chomp.gsub(' ','-').gsub(' ','').downcase)
-    puts "Enter max price: "
-    info.merge!(max_price: gets.chomp.match(/\d+/)[0].to_i)
-    puts "Enter min price: "
-    info.merge!(min_price: gets.chomp.match(/\d+/)[0].to_i)
-    puts "Enter number of beds: "
-    info.merge!(beds: gets.chomp.match(/\d+/)[0].to_i)
+    info = [:state, :city, :max_price, :min_price, :beds].zip(ARGV.cycle).to_h
+    if info[:state].nil? 
+        puts "Enter state: "
+        info.merge!(state: gets.chomp.downcase[0..1])
+    end
+    if info[:city].nil?
+        puts "Enter city: "
+        info.merge!(city: gets.chomp.gsub(' ','-').gsub(' ','').downcase)
+    end
+    if info[:max_price].nil?
+        puts "Enter max price: "
+        info.merge!(max_price: gets.chomp.match(/\d+/)[0].to_i)
+    end
+    if info[:min_price].nil?
+        puts "Enter min price: "
+        info.merge!(min_price: gets.chomp.match(/\d+/)[0].to_i)
+    end
+    if info[:beds].nil?
+        puts "Enter number of beds: "
+        info.merge!(beds: gets.chomp.match(/\d+/)[0].to_i)
+    end
 end
 
 
@@ -28,7 +38,7 @@ end
 #Nokogiri is used to parse the raw HTML that HTTParty scraped
 def getHTML(base_url)
     begin 
-        # input = userInput()
+        input = userInput()
         input = {state: 'wa', city: 'maple-valley', max_price: 2000, min_price: 1000, beds: 1}
         unparsed_page = HTTParty.get(base_url + '/' + input[:state] +  '/' + input[:city])
         parsed_page = Nokogiri::HTML(unparsed_page) 
@@ -122,12 +132,9 @@ def createXLS(apartments)
     format_bold = Spreadsheet::Format.new :horizontal_align => :center, :weight => :bold
     format_blue = Spreadsheet::Format.new :color => :blue
     format_right = Spreadsheet::Format.new :horizontal_align => :right
-  
-
     #write data to excel for every apartment scrapped
     apartments.each_with_index do |apartment, i|
         indx = i*10 #10 rows between each apartment data
-
         #formating
         #merge lambda fro easier merging of certain cells
         #takes in a 2d array [[row], [{start column, end column}]]
@@ -139,14 +146,12 @@ def createXLS(apartments)
         (0..5).each {|x| sheet.row(indx).set_format(x, format_full_border)}
         (0..5).each {|x| sheet.row(indx+3).set_format(x, format_bottom_border_bold)}
         (0..5).each {|x| sheet.row(indx+4).set_format(x, format_bold)}
-
         #entering data into cells
         sheet.row(indx).push(apartment[:name])
         sheet.row(indx+1).push("address", apartment[:address])
         sheet.row(indx+2).push("Link", "#{Spreadsheet::Link.new apartment[:link]}") #create hyperling
         sheet.row(indx+3).push("Floor Plans")
         sheet.row(indx+4).push("# Bedrooms", "","Price", "", "Sqrf")
-        
         #for every valid floor plan listing within apartment write data
         #inludes price, number of beds, and square footage
         apartment[:plans].each_with_index do |plan, j|
