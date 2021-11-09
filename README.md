@@ -1,1 +1,1 @@
-"# python scrapper" 
+"# Ruby scrapper for finding apartments" 
