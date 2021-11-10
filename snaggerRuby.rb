@@ -149,22 +149,6 @@ def listings(parsed_page, base_url, input)
 end
 
 
-# #get rating
-# def getRating()
-#     name = "Sunset View"
-#     address = "1140 Edmonds Ave NE, Renton, WA 98056"
-#     base_url = "https://www.apartmentratings.com/searchresults/?query="
-#     query_name = name.gsub(' ','%20')
-#     full_url = base_url + query_name
-#     unparsed_page = HTTParty.get(full_url, {:headers => {"User-Agent" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/605.1.15 (KHTML, like Gecko)"}})
-#     parsed_page = Nokogiri::HTML(unparsed_page)
-#     check = parsed_page.css("ul")
-#     puts "*************************************"
-#     puts check
-#     puts unparsed_page
-# end
-
-
 #sort the apartments 
 #sort based off price
 def sortApartments(apartments)
@@ -243,4 +227,4 @@ end
  file_name = createXLS(apartments, data[:user_input])
  system %{open "#{file_name}"}
 
-# getRating()
+
