@@ -82,7 +82,7 @@ def getHTML(base_url)
     # each pages valid appartments are appended as an array
     # resulting in a 2d array 
     # create a 1d array from all page apartments
-    [apartments.flatten, input]
+    {apartments: apartments.flatten, user_input: input}
 end
 
 
@@ -139,6 +139,7 @@ def listings(parsed_page, base_url, input)
                 name: apartment_listing.css('a').text,
                 link: base_url + apartment_listing.css('a')[0].attributes['href'].value.to_s,
                 address: apartment_listing.css('span').text,
+                rating: "https://www.apartmentratings.com/searchresults/?query=" + apartment_listing.css('a').text.gsub(' ','%20'),
                 plans: floor_plans.map(&:dup)
             }
         end
@@ -146,6 +147,22 @@ def listings(parsed_page, base_url, input)
     end
     apartments
 end
+
+
+# #get rating
+# def getRating()
+#     name = "Sunset View"
+#     address = "1140 Edmonds Ave NE, Renton, WA 98056"
+#     base_url = "https://www.apartmentratings.com/searchresults/?query="
+#     query_name = name.gsub(' ','%20')
+#     full_url = base_url + query_name
+#     unparsed_page = HTTParty.get(full_url, {:headers => {"User-Agent" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/605.1.15 (KHTML, like Gecko)"}})
+#     parsed_page = Nokogiri::HTML(unparsed_page)
+#     check = parsed_page.css("ul")
+#     puts "*************************************"
+#     puts check
+#     puts unparsed_page
+# end
 
 
 #sort the apartments 
@@ -170,7 +187,7 @@ end
 def createXLS(apartments, user_input)
     #creat new excel object
     book = Spreadsheet::Workbook.new
-    sheet = book.create_worksheet(name: 'First Sheet')
+    sheet = book.create_worksheet(name: 'Apartments')
     #initate formats for excel cells
     format_full_border = Spreadsheet::Format.new :horizontal_align => :center, :weight => :bold, :border => :thin, :pattern_fg_color => :Silver, :pattern => 1
     format_bottom_border_bold = Spreadsheet::Format.new :horizontal_align => :center, :weight => :bold, :bottom => :thin, :top => :thin, :pattern_fg_color => :Silver, :pattern => 1
@@ -185,44 +202,45 @@ def createXLS(apartments, user_input)
         #merge lambda fro easier merging of certain cells
         #takes in a 2d array [[row], [{start column, end column}]]
         add_merge = -> (row_col) {sheet.merge_cells(row_col[0], row_col[1][:start], row_col[0], row_col[1][:stop])}
-        merges = [ [indx, {start: 0, stop: 5}], [indx+1, {start: 1, stop: 5}], [indx+2, {start: 1, stop: 5}], [indx+3, {start: 0, stop: 5}], [indx+4, {start: 0, stop: 1}], [indx+4, {start: 2, stop: 3}], [indx+4, {start: 4, stop: 5}]]
+        merges = [ [indx, {start: 0, stop: 5}], [indx+1, {start: 1, stop: 5}], [indx+2, {start: 1, stop: 5}], [indx+3, {start: 1, stop: 5}], [indx+4, {start: 0, stop: 5}], [indx+5, {start: 0, stop: 1}], [indx+5, {start: 2, stop: 3}], [indx+5, {start: 4, stop: 5}]]
         merges.each(&add_merge)
+        #make link text blue
         sheet.row(indx+2).set_format(1, format_blue)
+        sheet.row(indx+3).set_format(1, format_blue)
         #format across 5 columns
         (0..5).each {|x| sheet.row(indx).set_format(x, format_full_border)}
-        (0..5).each {|x| sheet.row(indx+3).set_format(x, format_bottom_border_bold)}
-        (0..5).each {|x| sheet.row(indx+4).set_format(x, format_bold)}
+        (0..5).each {|x| sheet.row(indx+4).set_format(x, format_bottom_border_bold)}
+        (0..5).each {|x| sheet.row(indx+5).set_format(x, format_bold)}
         #entering data into cells
         sheet.row(indx).push(apartment[:name])
         sheet.row(indx+1).push("address", apartment[:address])
-        link = Spreadsheet::Link.new apartment[:link]
-        sheet.row(indx+2).push("Link", link) #create hyperling
-        sheet.row(indx+3).push("Floor Plans")
-        sheet.row(indx+4).push("# Bedrooms", "","Price", "", "Sqrf")
+        link = Spreadsheet::Link.new apartment[:link], "Listing Link For #{apartment[:name]}"
+        rating_link = Spreadsheet::Link.new apartment[:rating], "Rating Link For #{apartment[:name]}"
+        sheet.row(indx+2).push("Listing", link) #create hyperlink to apartment page
+        sheet.row(indx+3).push("Rating", rating_link) #create hyperlink to rating 
+        sheet.row(indx+4).push("Floor Plans")
+        sheet.row(indx+5).push("# Bedrooms", "","Price", "", "Sqrf")
         #for every valid floor plan listing within apartment write data
         #inludes price, number of beds, and square footage
         apartment[:plans].each_with_index do |plan, j|
-            indx2 = indx+5+j
+            indx2 = indx+6+j
             [ [indx2, {start: 0, stop: 1}], [indx2, {start: 2, stop: 3}], [indx2, {start: 4, stop: 5}]].each(&add_merge)
             (0..5).each {|x| sheet.row(indx2).set_format(x, format_right)}
             sheet.row(indx2).push(plan[:num_bed], "", plan[:price], "", plan[:footage])
             if j+1 == apartment[:plans].length then (0..5).each {|x| sheet.row(indx2).set_format(x, format_bottom_border)} end
         end   
     end
-    book.write "/Users/jweyer/Desktop/apartments-#{user_input[:city]}.xls"
+    file_name = "/Users/jweyer/Desktop/apartments-#{user_input[:city]}.xls"
+    book.write file_name
+    file_name
 end
 
 
-#MAIN
+ #MAIN
  base_url = 'https://www.apartmentlist.com'  
- #data is an array 
- #[0] all valid apartments
- #[1] user input
-#  data = getHTML(base_url)
-#  apartments = sortApartments(data[0])
-#  createXLS(apartments, data[1])
+ data = getHTML(base_url)
+ apartments = sortApartments(data[:apartments])
+ file_name = createXLS(apartments, data[:user_input])
+ system %{open "#{file_name}"}
 
- try = HTTParty.get("https://www.apartmentratings.com/searchresults/?query=The%20Groves", {:headers => {"User-Agent" => "Chrome/24.0.1309.0"}})
- puts try.body
- puts try.message
- puts try.code
+# getRating()
