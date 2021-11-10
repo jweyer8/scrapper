@@ -55,11 +55,13 @@ def getHTML(base_url)
         raise StandardError.new if unparsed_page.code == 404
     rescue SocketError => bad_url
         puts "Invalid input\nTry again:"
+        ARGV.clear
         retry
     rescue StandardError => unknown_state 
         #retry getting user input if 404 error
         puts "Invalid city or state"
         puts "#{unknown_state.message}"
+        ARGV.clear
         retry 
     end
 
@@ -216,9 +218,11 @@ end
  #data is an array 
  #[0] all valid apartments
  #[1] user input
- data = getHTML(base_url)
- apartments = sortApartments(data[0])
- createXLS(apartments, data[1])
+#  data = getHTML(base_url)
+#  apartments = sortApartments(data[0])
+#  createXLS(apartments, data[1])
 
-
-
+ try = HTTParty.get("https://www.apartmentratings.com/searchresults/?query=The%20Groves", {:headers => {"User-Agent" => "Chrome/24.0.1309.0"}})
+ puts try.body
+ puts try.message
+ puts try.code
